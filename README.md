@@ -117,6 +117,6 @@ For production deployment:
 
 The API endpoints are available at:
 
-- `/api/invoices/` - Invoice management
-- `/api/calculations/` - Loan calculations
+- `/` - Invoice management
+- `/invoices` - Loan calculations
 - `/api/customers/` - Customer management
