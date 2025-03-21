@@ -20,13 +20,12 @@ class TestInvoice:
         )
 
     def test_calculate_loan_details(self):
-        # Aquí probamos que los cálculos no estén locos
-        # Si esto falla, el equipo de finanzas nos mata 💀
+        """Test loan calculation with specific example"""
         invoice = Invoice.objects.create(
-            adjusted_gross_value=Decimal('1000.00'),
-            haircut_percent=Decimal('20.00'),
-            daily_advance_fee=Decimal('0.05'),
-            advance_duration=30,
+            adjusted_gross_value=Decimal('1000.00'),  # $1000
+            haircut_percent=Decimal('20.00'),         # 20%
+            daily_advance_fee=Decimal('0.05'),        # 0.05%
+            advance_duration=30,                      # 30 days
             customer_name='Test Customer',
             currency_code='USD',
             customer_id=1,
@@ -35,9 +34,18 @@ class TestInvoice:
         )
         
         loan_details = invoice.calculate_loan_details()
+        
+        # Haircut amount should be 20% of 1000 = 200
         assert loan_details['haircut_amount'] == Decimal('200.00')
+        
+        # Advance amount should be 1000 - 200 = 800
         assert loan_details['advance_amount'] == Decimal('800.00')
+        
+        # Daily fee should be 0.05% of 800 = 0.40
         assert loan_details['daily_fee_amount'] == Decimal('0.40')
+        
+        # Expected fees should be 0.40 * 30 days = 12.00
         assert loan_details['expected_fees'] == Decimal('12.00')
+
 
 
