@@ -1,0 +1,26 @@
+loan_calculator/
+├── manage.py
+├── requirements.txt
+├── core/
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── apps/
+│   ├── __init__.py
+│   ├── invoices/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── services.py
+│   │   ├── views.py
+│   │   ├── urls.py
+│   │   ├── serializers.py
+│   │   ├── tests/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_models.py
+│   │   │   ├── test_services.py
+│   │   │   └── test_views.py
+│   │   └── templates/
+│   │       └── invoices/
+│   │           ├── dashboard.html
+│   │           └── invoice_list.html

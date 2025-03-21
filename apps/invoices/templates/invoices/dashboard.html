@@ -1,0 +1,403 @@
+
+{% extends "base.html" %}
+{% load invoice_filters %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            {% for currency in currencies %}
+            {% with currency_totals=monthly_totals|filter_by_currency:currency %}
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">{{ currency }} Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">Total Value</small>
+                                <h6>{{ currency_totals|sum_field:'total_value'|floatformat:2 }}</h6>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Advance Amount</small>
+                                <h6>{{ currency_totals|sum_field:'advance_amount'|floatformat:2 }}</h6>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Expected Fees</small>
+                                <h6>{{ currency_totals|sum_field:'expected_fees'|floatformat:2 }}</h6>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Avg APR</small>
+                                <h6>{{ currency_totals|avg_field:'apr'|floatformat:2 }}%</h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+
+        <!-- Add this temporary debug section -->
+        <div class="d-none">
+            <pre>
+            Currencies: {{ currencies|safe }}
+            Monthly Totals: {{ monthly_totals|safe }}
+            </pre>
+        </div>
+
+    <!-- Filters Row -->
+    <div class="row mb-4">
+        <!-- Customer Filter -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Customer</h6>
+                    <form method="get" id="customerForm">
+                        <select name="customer_id" onchange="this.form.submit()" class="form-select">
+                            <option value="">All Customers</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.customer_id }}" 
+                                    {% if request.GET.customer_id == customer.customer_id|stringformat:"s" %}selected{% endif %}>
+                                {{ customer.customer_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <!-- Preserve other filters -->
+                        {% if request.GET.month %}<input type="hidden" name="month" value="{{ request.GET.month }}">{% endif %}
+                        {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}">{% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Month Filter -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Month</h6>
+                    <form method="get" id="monthForm">
+                        <select name="month" onchange="this.form.submit()" class="form-select">
+                            <option value="">All Months</option>
+                            {% for month in months %}
+                            <option value="{{ month.number }}" 
+                                    {% if current_month == month.number %}selected{% endif %}>
+                                {{ month.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <!-- Preserve other filters -->
+                        {% if request.GET.customer_id %}<input type="hidden" name="customer_id" value="{{ request.GET.customer_id }}">{% endif %}
+                        {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}">{% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sort Controls -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Sort Order</h6>
+                    <div class="btn-group w-100" role="group">
+                        <a href="?{% if request.GET.customer_id %}customer_id={{ request.GET.customer_id }}&{% endif %}{% if request.GET.month %}month={{ request.GET.month }}&{% endif %}sort=month" 
+                           class="btn btn-outline-primary {% if current_sort == 'month' %}active{% endif %}">
+                            <i class="fas fa-sort-amount-down-alt"></i> Oldest
+                        </a>
+                        <a href="?{% if request.GET.customer_id %}customer_id={{ request.GET.customer_id }}&{% endif %}{% if request.GET.month %}month={{ request.GET.month }}&{% endif %}sort=-month" 
+                           class="btn btn-outline-primary {% if current_sort == '-month' %}active{% endif %}">
+                            <i class="fas fa-sort-amount-down"></i> Newest
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Monthly Trends</h6>
+                    <div class="mb-2">
+                        <select id="chartCurrency" class="form-select form-select-sm" style="width: auto;">
+                            {% for currency in currencies %}
+                                <option value="{{ currency }}">{{ currency }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="height: 250px;">
+                        <canvas id="monthlyTrendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Customer Distribution</h6>
+                    <div class="mb-2">
+                        <select id="pieCurrency" class="form-select form-select-sm" style="width: auto;">
+                            {% for currency in currencies %}
+                                <option value="{{ currency }}">{{ currency }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="height: 250px;">
+                        <canvas id="customerDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Totals Table -->
+    <div class="card">
+        <div class="card-body">
+            <h6 class="card-title">Monthly Totals</h6>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Customer</th>
+                            <th>Total Value</th>
+                            <th>Haircut Amount</th>
+                            <th>Advance Amount</th>
+                            <th>Daily Fee</th>
+                            <th>Expected Fees</th>
+                            <th>APR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for total in monthly_totals %}
+                        <tr>
+                            <td>{{ total.month|date:"F Y" }}</td>
+                            <td>{{ total.customer_name }}</td>
+                            <td>${{ total.total_value|floatformat:2 }}</td>
+                            <td>${{ total.haircut_amount|floatformat:2 }}</td>
+                            <td>${{ total.advance_amount|floatformat:2 }}</td>
+                            <td>${{ total.daily_fee_amount|floatformat:2 }}</td>
+                            <td>${{ total.expected_fees|floatformat:2 }}</td>
+                            <td>{{ total.apr|floatformat:2 }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const monthlyData = {{ monthly_totals_json|safe }};
+    let trendChart, pieChart;
+
+    function formatCurrency(value, currency) {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency
+        }).format(value);
+    }
+
+    // Add this at the start of your script section for debugging
+    console.log('Monthly Data:', {{ monthly_totals_json|safe }});
+    
+    function updateTrendChart(currency) {
+        const filteredData = monthlyData.filter(d => d.currency_code === currency);
+        console.log('Filtered data for currency', currency, ':', filteredData);
+        
+        // Group data by month
+        const monthlyGrouped = {};
+        filteredData.forEach(d => {
+            const monthKey = new Date(d.month).toLocaleDateString('en-US', { 
+                month: 'short', 
+                year: 'numeric' 
+            });
+            if (!monthlyGrouped[monthKey]) {
+                monthlyGrouped[monthKey] = {
+                    total_value: 0,
+                    advance_amount: 0,
+                    expected_fees: 0
+                };
+            }
+            monthlyGrouped[monthKey].total_value += parseFloat(d.total_value || 0);
+            monthlyGrouped[monthKey].advance_amount += parseFloat(d.advance_amount || 0);
+            monthlyGrouped[monthKey].expected_fees += parseFloat(d.expected_fees || 0);
+        });
+
+        console.log('Grouped monthly data:', monthlyGrouped);
+
+        const months = Object.keys(monthlyGrouped).sort((a, b) => new Date(a) - new Date(b));
+        
+        trendChart.data.labels = months;
+        trendChart.data.datasets = [
+            {
+                label: 'Total Value',
+                data: months.map(m => monthlyGrouped[m].total_value),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            },
+            {
+                label: 'Advance Amount',
+                data: months.map(m => monthlyGrouped[m].advance_amount),
+                borderColor: 'rgb(54, 162, 235)',
+                tension: 0.1
+            },
+            {
+                label: 'Expected Fees',
+                data: months.map(m => monthlyGrouped[m].expected_fees),
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1
+            }
+        ];
+        
+        trendChart.options.scales.y.ticks.callback = function(value) {
+            return formatCurrency(value, currency);
+        };
+        
+        trendChart.update();
+    }
+
+    function updatePieChart(currency) {
+        const filteredData = monthlyData.filter(d => d.currency_code === currency);
+        const customerTotals = {};
+        
+        filteredData.forEach(d => {
+            if (!customerTotals[d.customer_name]) {
+                customerTotals[d.customer_name] = 0;
+            }
+            customerTotals[d.customer_name] += parseFloat(d.total_value || 0);
+        });
+
+        // Sort by value descending
+        const sortedCustomers = Object.entries(customerTotals)
+            .sort(([,a], [,b]) => b - a)
+            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+
+        pieChart.data.labels = Object.keys(sortedCustomers);
+        pieChart.data.datasets[0].data = Object.values(sortedCustomers);
+        
+        pieChart.options.plugins.tooltip.callbacks.label = function(context) {
+            return `${context.label}: ${formatCurrency(context.raw, currency)}`;
+        };
+        
+        pieChart.update();
+    }
+
+    // Initialize charts
+    const ctx1 = document.getElementById('monthlyTrendsChart').getContext('2d');
+    trendChart = new Chart(ctx1, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    align: 'start',
+                    labels: { boxWidth: 12, padding: 8 }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: null }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+
+    const ctx2 = document.getElementById('customerDistributionChart').getContext('2d');
+    pieChart = new Chart(ctx2, {
+        type: 'pie',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: [
+                    'rgb(255, 99, 132)',
+                    'rgb(54, 162, 235)',
+                    'rgb(255, 206, 86)',
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)',
+                    'rgb(255, 159, 64)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    align: 'center',
+                    labels: { boxWidth: 12, padding: 8 }
+                },
+                tooltip: {
+                    callbacks: { label: null }
+                }
+            }
+        }
+    });
+
+    // Event listeners for currency selectors
+    document.getElementById('chartCurrency').addEventListener('change', (e) => {
+        updateTrendChart(e.target.value);
+    });
+
+    document.getElementById('pieCurrency').addEventListener('change', (e) => {
+        updatePieChart(e.target.value);
+    });
+
+    // Initialize charts with first available currency
+    document.addEventListener('DOMContentLoaded', function() {
+        const currencies = Array.from(new Set(monthlyData.map(d => d.currency_code)));
+        console.log('Available currencies:', currencies);
+        
+        if (currencies.length > 0) {
+            // Update currency dropdowns
+            const currencySelects = ['chartCurrency', 'pieCurrency'];
+            currencySelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                select.innerHTML = currencies.map(curr => 
+                    `<option value="${curr}">${curr}</option>`
+                ).join('');
+            });
+
+            // Initialize charts with first currency
+            const defaultCurrency = currencies[0];
+            updateTrendChart(defaultCurrency);
+            updatePieChart(defaultCurrency);
+        } else {
+            console.error('No currencies available in the data');
+        }
+    });
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
